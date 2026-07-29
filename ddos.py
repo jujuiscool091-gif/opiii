@@ -452,7 +452,6 @@ def ping_monitor(ip, stop_event, history):
             if len(data) >= 28:
                 rtt = (t2 - t1) * 1000
                 history.append(("OK", rtt))
-                # Print every ping (real-time)
                 print(f"{Fore.MAGENTA}[PING] {rtt:.2f} ms")
             else:
                 history.append(("BAD", 0))
