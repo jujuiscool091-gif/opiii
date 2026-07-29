@@ -28,7 +28,7 @@ TTL_VALUES = list(range(32, 129))
 
 class AttackState:
     def __init__(self):
-        self.target_ip = "127.0.0.1"
+        self.target_ip = "enter ip"
         self.target_port = 0
         self.threads = 256
         self.duration = 0
