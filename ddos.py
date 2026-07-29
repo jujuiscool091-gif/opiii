@@ -269,7 +269,7 @@ def print_banner():
 def show_status():
     status = "RUNNING" if state.running else "STOPPED"
     color = Fore.BLUE if state.running else Fore.MAGENTA
-    print(f"\n{Fore.MAGENTA}=== TIDAL-CONSOLE STATUS ===")
+    print(f"\n{Fore.MAGENTA}=== TIDAL-CONSOLE ===")
     print(f"{Fore.BLUE}  Target    : {state.target_ip}:{state.target_port or 'random'}")
     print(f"{Fore.BLUE}  Threads   : {state.threads}")
     print(f"{Fore.BLUE}  Duration  : {state.duration}s (0=infinite)")
@@ -393,9 +393,9 @@ def stop_attack():
 def interactive_panel():
     clear()
     print_banner()
-    print(Fore.MAGENTA + Style.BRIGHT + " [WARN] MIGHT LAG YOU, JUST LOCK IN" + Style.RESET_ALL)
+    print(Fore.MAGENTA + Style.BRIGHT + " IRON-TIDE v4.1 - PURE FLOOD + LIVE STATS" + Style.RESET_ALL)
     print(Fore.BLUE + "  Run as Admin/root. Attack external IP only." )
-    print(Fore.BLUE + "  packets. Stats printed every 2s.\n")
+    print(Fore.BLUE + "  No ping, only packets. Stats printed every 2s.\n")
     state.spoof_pool = build_spoof_pool(100000)
     while True:
         show_status()
