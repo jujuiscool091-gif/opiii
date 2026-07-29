@@ -393,9 +393,9 @@ def stop_attack():
 def interactive_panel():
     clear()
     print_banner()
-    print(Fore.MAGENTA + Style.BRIGHT + " IRON-TIDE v4.1 - PURE FLOOD + LIVE STATS" + Style.RESET_ALL)
-    print(Fore.BLUE + "  Run as Admin/root. Attack external IP only." )
-    print(Fore.BLUE + "  No ping, only packets. Stats printed every 2s.\n")
+    print(Fore.MAGENTA + Style.BRIGHT + " [WARN] MIGHT LAG U" + Style.RESET_ALL)
+    print(Fore.BLUE + "  Run as Admin/root." )
+    print(Fore.BLUE + " 4M4 OWNS \n")
     state.spoof_pool = build_spoof_pool(100000)
     while True:
         show_status()
