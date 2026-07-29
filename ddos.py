@@ -503,7 +503,7 @@ def curses_dashboard():
     def draw():
         while not state.stop_event.is_set():
             stdscr.clear()
-            stdscr.addstr(0, 0, f"IRON-TIDE v3.0 - Target: {state.target_ip}:{state.target_port or 'rand'}", curses.A_BOLD)
+            stdscr.addstr(0, 0, f"Comon - Target: {state.target_ip}:{state.target_port or 'rand'}", curses.A_BOLD)
             stdscr.addstr(1, 0, f"Threads: {state.threads} | Running: {state.running} | Packets: {state.stats['packets']}")
             stdscr.addstr(2, 0, f"Last ping: {state.ping_history[-1] if state.ping_history else 'N/A'}")
             vecs = [v for v,en in state.vectors.items() if en]
@@ -519,8 +519,8 @@ def curses_dashboard():
 def interactive_panel():
     clear()
     print_banner()
-    print(Fore.MAGENTA + Style.BRIGHT + "  IRON-TIDE v3.0 - ENTERPRISE DDoS SUITE" + Style.RESET_ALL)
-    print(Fore.BLUE + "  [WARN] This is a fictional post-apocalyptic technical manual. Do not use." )
+    print(Fore.MAGENTA + Style.BRIGHT + " ddos ! " + Style.RESET_ALL)
+    print(Fore.BLUE + "  [WARN] THIS MIGHT LAG U" )
     print(Fore.BLUE + "  Run with sudo/Admin for raw sockets and spoofing.\n")
     # Build initial pool
     state.spoof_pool = build_spoof_pool(50000)
